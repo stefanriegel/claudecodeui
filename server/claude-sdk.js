@@ -171,13 +171,18 @@ function matchesToolPermission(entry, toolName, input) {
 }
 
 function resolveImmediateToolDecision(sdkOptions, toolName, input) {
-  if (sdkOptions.permissionMode === 'bypassPermissions') {
-    return { behavior: 'allow', updatedInput: input };
-  }
-
+  // Interactive tools (AskUserQuestion, ExitPlanMode) always route to the
+  // interactive flow — never auto-approved, even under bypassPermissions.
+  // Auto-approving them yields an empty answer and a "Skipped" tool result.
+  // This must be checked before the bypassPermissions shortcut to stay
+  // consistent with the PreToolUse hook, which always prompts for these tools.
   const requiresInteraction = TOOLS_REQUIRING_INTERACTION.has(toolName);
   if (requiresInteraction) {
     return null;
+  }
+
+  if (sdkOptions.permissionMode === 'bypassPermissions') {
+    return { behavior: 'allow', updatedInput: input };
   }
 
   const isDisallowed = (sdkOptions.disallowedTools || []).some(entry =>
@@ -653,20 +658,12 @@ async function queryClaudeSDK(command, options = {}, ws) {
       }]
     };
 
-    // Caveat: in 'auto' and 'bypassPermissions' modes the SDK resolves approval
-    // at the permission-mode step and skips this callback, so interactive tools
-    // (AskUserQuestion, ExitPlanMode) won't reach the UI — the classifier/bypass
-    // auto-approves them and the model acts on a generated answer. Move these
-    // tools to a PreToolUse hook (runs before the mode check) if we need them
-    // to work in those modes.
-    sdkOptions.canUseTool = async (toolName, input, context) => {
+    // Prompt the UI for approval and wait for the user's decision. Returns a
+    // canUseTool-style result ({ behavior: 'allow'|'deny', ... }). Shared by
+    // both canUseTool and the PreToolUse hook so interactive tools behave the
+    // same regardless of which path the SDK routes them through.
+    const requestInteractiveApproval = async (toolName, input, signal) => {
       const requiresInteraction = TOOLS_REQUIRING_INTERACTION.has(toolName);
-
-      const immediateDecision = resolveImmediateToolDecision(sdkOptions, toolName, input);
-      if (immediateDecision) {
-        return immediateDecision;
-      }
-
       const requestId = createRequestId();
       ws.send(createNormalizedMessage({ kind: 'permission_request', requestId, toolName, input, sessionId: capturedSessionId || sessionId || null, provider: 'claude' }));
       emitNotification(createNotificationEvent({
@@ -682,7 +679,7 @@ async function queryClaudeSDK(command, options = {}, ws) {
 
       const decision = await waitForToolApproval(requestId, {
         timeoutMs: requiresInteraction ? 0 : undefined,
-        signal: context?.signal,
+        signal,
         metadata: {
           _sessionId: capturedSessionId || sessionId || null,
           _toolName: toolName,
@@ -714,6 +711,52 @@ async function queryClaudeSDK(command, options = {}, ws) {
       }
 
       return { behavior: 'deny', message: decision.message ?? 'User denied tool use' };
+    };
+
+    // Interactive tools (AskUserQuestion, ExitPlanMode) are intercepted here,
+    // in a PreToolUse hook, because it runs *before* the SDK's permission-mode
+    // resolution. In 'acceptEdits'/'bypassPermissions' modes that step
+    // auto-approves the tool and never calls canUseTool, so without this hook
+    // the interactive panel never renders and the tool resolves as "Skipped".
+    // Returning allow/deny here short-circuits the mode check and canUseTool.
+    sdkOptions.hooks.PreToolUse = [{
+      matcher: Array.from(TOOLS_REQUIRING_INTERACTION).join('|'),
+      hooks: [async (input, _toolUseId, { signal }) => {
+        const toolName = input?.tool_name;
+        if (!TOOLS_REQUIRING_INTERACTION.has(toolName)) {
+          return {};
+        }
+        const toolInput = input?.tool_input ?? {};
+        const result = await requestInteractiveApproval(toolName, toolInput, signal);
+        if (result.behavior === 'allow') {
+          return {
+            hookSpecificOutput: {
+              hookEventName: 'PreToolUse',
+              permissionDecision: 'allow',
+              updatedInput: result.updatedInput ?? toolInput,
+            }
+          };
+        }
+        return {
+          hookSpecificOutput: {
+            hookEventName: 'PreToolUse',
+            permissionDecision: 'deny',
+            permissionDecisionReason: result.message || 'User denied tool use',
+          }
+        };
+      }]
+    }];
+
+    sdkOptions.canUseTool = async (toolName, input, context) => {
+      const immediateDecision = resolveImmediateToolDecision(sdkOptions, toolName, input);
+      if (immediateDecision) {
+        return immediateDecision;
+      }
+
+      // Interactive tools are normally handled by the PreToolUse hook above and
+      // never reach here. This remains as a fallback for the degraded path where
+      // hook registration fails and hooks are stripped (see query() try/catch).
+      return await requestInteractiveApproval(toolName, input, context?.signal);
     };
 
     // Query constructor reads this synchronously.
