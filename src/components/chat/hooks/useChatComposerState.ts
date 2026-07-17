@@ -745,6 +745,17 @@ export function useChatComposerState({
           return;
         }
 
+        // Carry the composer's selected permission mode onto the freshly
+        // created session id. Establishing the session updates selectedSession,
+        // which retriggers the per-session reconcile effect in
+        // useChatProviderState; without a saved mode under the new id it would
+        // reset to default and silently drop a just-selected mode like
+        // bypassPermissions.
+        safeLocalStorage.setItem(
+          `permissionMode-${targetSessionId}`,
+          resolvePermissionModeForProvider(provider, permissionMode),
+        );
+
         onSessionEstablished?.(targetSessionId, {
           provider,
           project: selectedProject,
