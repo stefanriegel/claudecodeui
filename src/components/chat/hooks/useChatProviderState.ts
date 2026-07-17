@@ -559,10 +559,15 @@ export function useChatProviderState({ selectedSession, selectedProject: _select
       throw new Error('Unable to change the active model for this session.');
     }
 
+    // Keep the composer's displayed model in sync with the session change;
+    // otherwise the label lags behind the just-selected model.
+    const resolvedModel = body.data.model || model;
+    setStoredProviderModel(targetProvider, resolvedModel);
+
     return {
       scope: 'session' as const,
       changed: body.data.changed === true,
-      model: body.data.model || model,
+      model: resolvedModel,
     };
   }, [setStoredProviderModel]);
 

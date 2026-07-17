@@ -601,9 +601,13 @@ async function queryClaudeSDK(command, options = {}, ws) {
   };
 
   try {
+    // Per-session model changes are stored keyed by the app session id (that is
+    // what the /active-model route receives from the client). The provider-native
+    // `sessionId` rotates each turn, so resolving with it would miss the stored
+    // change and silently fall back to options.model (the account default).
     const resolvedModel = await providerModelsService.resolveResumeModel(
       'claude',
-      sessionId,
+      options.appSessionId || sessionId,
       options.model,
     );
     let effortModels = CLAUDE_FALLBACK_MODELS;
