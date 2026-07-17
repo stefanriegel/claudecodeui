@@ -3,6 +3,12 @@
 All notable changes to CloudCLI UI will be documented in this file.
 
 
+## [1.37.7](https://github.com/stefanriegel/claudecodeui/compare/v1.37.6...v1.37.7) (2026-07-17)
+
+### Bug Fixes
+
+* surface silently-dropped chat runs instead of forcing a resend ([62a1a3e](https://github.com/stefanriegel/claudecodeui/commit/62a1a3eca83e8f6d94f6d9673f023e1e82991e8b))
+
 ## [1.37.6](https://github.com/stefanriegel/claudecodeui/compare/v1.37.5...v1.37.6) (2026-07-17)
 
 ### Bug Fixes
