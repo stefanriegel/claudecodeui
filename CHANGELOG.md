@@ -3,6 +3,12 @@
 All notable changes to CloudCLI UI will be documented in this file.
 
 
+## [1.37.6](https://github.com/stefanriegel/claudecodeui/compare/v1.37.5...v1.37.6) (2026-07-17)
+
+### Bug Fixes
+
+* render interactive tool panels in auto and bypass permission modes ([e63f025](https://github.com/stefanriegel/claudecodeui/commit/e63f02598b85c48fcc3135961bc96932c52b5a58))
+
 ## [1.37.5](https://github.com/stefanriegel/claudecodeui/compare/v1.37.4...v1.37.5) (2026-07-17)
 
 ### Bug Fixes
