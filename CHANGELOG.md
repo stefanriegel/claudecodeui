@@ -3,6 +3,15 @@
 All notable changes to CloudCLI UI will be documented in this file.
 
 
+## [1.37.4](https://github.com/stefanriegel/claudecodeui/compare/v1.37.3...v1.37.4) (2026-07-17)
+
+### Bug Fixes
+
+* bump @openai/codex-sdk to ^0.144.0 to support newer Codex models ([#1001](https://github.com/stefanriegel/claudecodeui/issues/1001)) ([caf86ce](https://github.com/stefanriegel/claudecodeui/commit/caf86ce897524731ba02c1c098d493714c105382))
+* codex subagents should not appear in the sidebar ([40d5b29](https://github.com/stefanriegel/claudecodeui/commit/40d5b2958a0d9d99fc9b19a72b546d926d6ff6b2))
+* remove node_env from electron ([c05361d](https://github.com/stefanriegel/claudecodeui/commit/c05361d8102b3d4486a39857cc0d9c7c5f5b00ad))
+* validate X-Refreshed-Token before storing it as the auth token ([#971](https://github.com/stefanriegel/claudecodeui/issues/971)) ([b92a20b](https://github.com/stefanriegel/claudecodeui/commit/b92a20b116c60ac868788f6a195def2658cbba7a))
+
 ## [1.37.3](https://github.com/stefanriegel/claudecodeui/compare/v1.37.2...v1.37.3) (2026-07-07)
 
 ### Maintenance
