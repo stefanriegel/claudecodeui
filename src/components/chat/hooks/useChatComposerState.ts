@@ -892,6 +892,12 @@ export function useChatComposerState({
       projectId: selectedProject.projectId,
       provider,
     })) {
+      // Stale head prompt: it was queued for a different session/project/
+      // provider than the one now active. Drop it (never inject it into the
+      // wrong context) instead of returning — returning would leave it at the
+      // head forever, wedging the whole queue and forcing a manual resend.
+      // Removing it lets the effect re-run and drain any following prompts.
+      setPromptQueue(rest);
       return;
     }
 

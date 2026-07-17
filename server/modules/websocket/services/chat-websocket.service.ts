@@ -173,6 +173,10 @@ async function handleChatSend(
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.error(`[Chat] Provider runtime "${provider}" failed`, { sessionId, error: message });
+    // Surface the failure to the client. Without this the run ends with only a
+    // bare terminal `complete` (see finally), which the UI renders as silence —
+    // indistinguishable from an empty success — forcing the user to resend.
+    run.writer.send({ kind: 'error', provider, sessionId, content: `Run failed: ${message}` });
   } finally {
     // Safety net: a runtime that crashed (or resolved) without emitting its
     // terminal `complete` would otherwise leave the session stuck in

@@ -84,3 +84,35 @@ test('chat.send passes stable app session id alongside provider resume id', asyn
     assert.equal(capturedOptions?.appSessionId, 'app-codex-1');
   });
 });
+
+test('chat.send surfaces a provider spawn failure as an error before completing', async () => {
+  await withIsolatedDatabase(async () => {
+    sessionsDb.createAppSession('app-codex-2', 'codex', '/workspace/demo');
+
+    const dependencies = createNoopDependencies();
+    dependencies.spawnFns.codex = async () => {
+      throw new Error('boom');
+    };
+
+    const socket = new FakeChatSocket();
+    handleChatConnection(socket as never, { user: { id: 'user-1' } } as never, dependencies);
+    socket.emit('message', Buffer.from(JSON.stringify({
+      type: 'chat.send',
+      sessionId: 'app-codex-2',
+      content: 'trigger a failure',
+    })));
+
+    // Let the awaited spawn + finally settle.
+    for (let i = 0; i < 5; i += 1) {
+      await new Promise((resolve) => setImmediate(resolve));
+    }
+
+    const errorIndex = socket.frames.findIndex((f) => f.kind === 'error');
+    const completeIndex = socket.frames.findIndex((f) => f.kind === 'complete');
+
+    assert.ok(errorIndex >= 0, 'expected an error frame for the failed spawn');
+    assert.match(String(socket.frames[errorIndex].content), /boom/);
+    assert.ok(completeIndex >= 0, 'expected a terminal complete frame');
+    assert.ok(errorIndex < completeIndex, 'error must arrive before the terminal complete');
+  });
+});
