@@ -3,6 +3,13 @@
 All notable changes to CloudCLI UI will be documented in this file.
 
 
+## [1.37.5](https://github.com/stefanriegel/claudecodeui/compare/v1.37.4...v1.37.5) (2026-07-17)
+
+### Bug Fixes
+
+* preserve selected permission mode across session establishment ([c911973](https://github.com/stefanriegel/claudecodeui/commit/c911973012c007d593ce40743c1258cf7e5bdf23))
+* resolve session model change by app session id ([a4647cc](https://github.com/stefanriegel/claudecodeui/commit/a4647cc21c038809128b297251f4e4fbfb091214))
+
 ## [1.37.4](https://github.com/stefanriegel/claudecodeui/compare/v1.37.3...v1.37.4) (2026-07-17)
 
 ### Bug Fixes
