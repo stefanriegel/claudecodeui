@@ -479,6 +479,30 @@ export function useChatComposerState({
     );
   }, [executeCommand]);
 
+  const currentModel =
+    provider === 'cursor'
+      ? cursorModel
+      : provider === 'codex'
+        ? codexModel
+        : provider === 'gemini'
+          ? geminiModel
+          : provider === 'opencode'
+            ? opencodeModel
+            : claudeModel;
+
+  const showModelsModal = useCallback(() => {
+    executeCommand(
+      {
+        name: '/models',
+        description: 'Select active model',
+        namespace: 'builtin',
+        metadata: { type: 'builtin' },
+      } as SlashCommand,
+      '/models',
+      { preserveInput: true },
+    );
+  }, [executeCommand]);
+
   const {
     slashCommands,
     slashCommandsCount,
@@ -1255,6 +1279,8 @@ export function useChatComposerState({
     selectFile,
     attachedImages,
     setAttachedImages,
+    currentModel,
+    showModelsModal,
     uploadingImages,
     imageErrors,
     getRootProps,
