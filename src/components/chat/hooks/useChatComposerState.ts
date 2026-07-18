@@ -20,6 +20,11 @@ import type { MarkSessionProcessing } from '../../../hooks/useSessionProtection'
 import { grantClaudeToolPermission } from '../utils/chatPermissions';
 import { safeLocalStorage } from '../utils/chatStorage';
 import {
+  deserializeStoredAttachments,
+  serializeStoredAttachments,
+  type StoredAttachment,
+} from '../utils/attachmentStorage';
+import {
   dequeuePrompt,
   enqueuePrompt,
   isQueueablePrompt,
@@ -37,6 +42,23 @@ import { escapeRegExp } from '../utils/chatFormatting';
 
 import { useFileMentions } from './useFileMentions';
 import { type SlashCommand, useSlashCommands } from './useSlashCommands';
+
+const ATTACHMENT_STORAGE_PREFIX = 'draft_images_';
+
+function fileToStoredAttachment(file: File): Promise<StoredAttachment> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () =>
+      resolve({ name: file.name, type: file.type, dataUrl: String(reader.result) });
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
+}
+
+async function storedAttachmentToFile(stored: StoredAttachment): Promise<File> {
+  const blob = await (await fetch(stored.dataUrl)).blob();
+  return new File([blob], stored.name, { type: stored.type });
+}
 
 interface UseChatComposerStateArgs {
   selectedProject: Project | null;
@@ -957,12 +979,63 @@ export function useChatComposerState({
     if (!selectedProjectId) {
       return;
     }
+    const raw = safeLocalStorage.getItem(`${ATTACHMENT_STORAGE_PREFIX}${selectedProjectId}`);
+    const stored = deserializeStoredAttachments(raw);
+    if (stored.length === 0) {
+      return;
+    }
+    let cancelled = false;
+    Promise.all(stored.map(storedAttachmentToFile))
+      .then((files) => {
+        if (!cancelled) {
+          setAttachedImages(files.slice(0, 5));
+        }
+      })
+      .catch((error) => console.error('Failed to restore attachments:', error));
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedProjectId]);
+
+  useEffect(() => {
+    if (!selectedProjectId) {
+      return;
+    }
     if (input !== '') {
       safeLocalStorage.setItem(`draft_input_${selectedProjectId}`, input);
     } else {
       safeLocalStorage.removeItem(`draft_input_${selectedProjectId}`);
     }
   }, [input, selectedProjectId]);
+
+  useEffect(() => {
+    if (!selectedProjectId) {
+      return;
+    }
+    const key = `${ATTACHMENT_STORAGE_PREFIX}${selectedProjectId}`;
+    if (attachedImages.length === 0) {
+      safeLocalStorage.removeItem(key);
+      return;
+    }
+    let cancelled = false;
+    Promise.all(attachedImages.map(fileToStoredAttachment))
+      .then((stored) => {
+        if (cancelled) {
+          return;
+        }
+        const raw = serializeStoredAttachments(stored);
+        if (raw === null) {
+          console.warn('Attachments exceed persistence quota; skipping save.');
+          safeLocalStorage.removeItem(key);
+          return;
+        }
+        safeLocalStorage.setItem(key, raw);
+      })
+      .catch((error) => console.error('Failed to persist attachments:', error));
+    return () => {
+      cancelled = true;
+    };
+  }, [attachedImages, selectedProjectId]);
 
   useEffect(() => {
     if (!textareaRef.current) {
