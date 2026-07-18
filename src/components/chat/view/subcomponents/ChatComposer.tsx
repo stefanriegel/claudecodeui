@@ -71,6 +71,8 @@ interface ChatComposerProps {
   onSelectEffort: (effort: string) => void;
   tokenBudget: Record<string, unknown> | null;
   onShowTokenUsage: () => void;
+  currentModel: string;
+  onOpenModelPicker: () => void;
   slashCommandsCount: number;
   queuedPromptCount: number;
   onToggleCommandMenu: () => void;
@@ -128,6 +130,8 @@ export default function ChatComposer({
   onSelectEffort,
   tokenBudget,
   onShowTokenUsage,
+  currentModel,
+  onOpenModelPicker,
   slashCommandsCount,
   queuedPromptCount,
   onToggleCommandMenu,
@@ -515,6 +519,17 @@ export default function ChatComposer({
               </div>
             )}
 
+            {currentModel && (
+              <button
+                type="button"
+                onClick={onOpenModelPicker}
+                className="inline-flex h-8 items-center gap-1.5 rounded-lg border-border/70 bg-background/70 px-2 text-xs text-muted-foreground shadow-sm transition-colors hover:border-primary/25 hover:text-foreground sm:px-2.5"
+                aria-label={`Change model, current model ${currentModel}`}
+                title="Change model"
+              >
+                <span className="max-w-40 truncate font-medium text-foreground">{currentModel}</span>
+              </button>
+            )}
             <TokenUsageSummary usage={tokenBudget} onClick={onShowTokenUsage} />
 
             <PromptInputButton

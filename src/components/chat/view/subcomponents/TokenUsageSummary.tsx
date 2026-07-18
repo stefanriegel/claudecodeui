@@ -1,5 +1,7 @@
 import { ActivityIcon } from 'lucide-react';
 
+import { computeContextHealth, type ContextLevel } from '../../utils/contextHealth';
+
 type TokenUsageSummaryProps = {
   usage: Record<string, unknown> | null;
   onClick?: () => void;
@@ -38,6 +40,13 @@ export default function TokenUsageSummary({ usage, onClick }: TokenUsageSummaryP
   const inputTokens = readUsageNumber(usage?.inputTokens ?? breakdown?.input);
   const outputTokens = readUsageNumber(usage?.outputTokens ?? breakdown?.output);
   const usedTokens = readUsageNumber(usage?.used) || inputTokens + outputTokens;
+  const totalTokens = readUsageNumber(usage?.total);
+  const health = computeContextHealth(usedTokens, totalTokens);
+  const barColor: Record<ContextLevel, string> = {
+    ok: 'bg-emerald-500',
+    warn: 'bg-amber-500',
+    critical: 'bg-red-500',
+  };
 
   return (
     <button
@@ -52,6 +61,18 @@ export default function TokenUsageSummary({ usage, onClick }: TokenUsageSummaryP
       </span>
       <span className="font-medium text-foreground">{formatTokenCount(usedTokens)}</span>
       <span className="hidden text-muted-foreground/70 sm:inline">tokens</span>
+      {health && (
+        <span
+          className="hidden h-1.5 w-10 overflow-hidden rounded-full bg-border/60 sm:inline-block"
+          title={`${health.percent}% context window used`}
+          aria-label={`Context ${health.percent}% used`}
+        >
+          <span
+            className={`block h-full rounded-full ${barColor[health.level]}`}
+            style={{ width: `${health.percent}%` }}
+          />
+        </span>
+      )}
     </button>
   );
 }

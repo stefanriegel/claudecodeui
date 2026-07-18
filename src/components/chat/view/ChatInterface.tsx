@@ -197,6 +197,8 @@ function ChatInterface({
     commandModalPayload,
     closeCommandModal,
     showCostModal,
+    showModelsModal,
+    currentModel,
     queuedPromptCount,
     useWorktreeForSession,
     setUseWorktreeForSession,
@@ -431,6 +433,8 @@ function ChatInterface({
           onSelectEffort={(nextEffort) => setStoredProviderEffort(provider, nextEffort)}
           tokenBudget={tokenBudget}
           onShowTokenUsage={showCostModal}
+          currentModel={currentModel}
+          onOpenModelPicker={showModelsModal}
           slashCommandsCount={slashCommandsCount}
           queuedPromptCount={queuedPromptCount}
           onToggleCommandMenu={handleToggleCommandMenu}

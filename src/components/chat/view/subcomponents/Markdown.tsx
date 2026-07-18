@@ -11,6 +11,7 @@ import { copyTextToClipboard } from '../../../../utils/clipboard';
 import { getArtifactLinkKind, stripArtifactLineSuffix } from '../../utils/artifactLinks';
 import { normalizeInlineCodeFences } from '../../utils/chatFormatting';
 import { createChatMarkdownRemarkPlugins } from './markdownPlugins';
+import MermaidDiagram from './MermaidDiagram';
 
 type MarkdownProps = {
   children: React.ReactNode;
@@ -64,6 +65,10 @@ const CodeBlock = ({ node, inline, className, children, ...props }: CodeBlockPro
   }
 
   const language = /language-(\w+)/.exec(className || '')?.[1] ?? 'text';
+
+  if (language === 'mermaid') {
+    return <MermaidDiagram code={raw} isDarkMode={isDarkMode} />;
+  }
 
   return (
     <div className="group relative my-2">

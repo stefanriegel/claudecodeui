@@ -11,8 +11,13 @@ export const safeLocalStorage = {
         console.warn('localStorage quota exceeded, clearing old data');
 
         const keys = Object.keys(localStorage);
-        const draftKeys = keys.filter((k) => k.startsWith('draft_input_'));
-        draftKeys.forEach((k) => {
+        // Evict image drafts first (largest consumers), then text drafts.
+        // Never evict the key currently being written.
+        const evictable = [
+          ...keys.filter((k) => k.startsWith('draft_images_')),
+          ...keys.filter((k) => k.startsWith('draft_input_')),
+        ].filter((k) => k !== key);
+        evictable.forEach((k) => {
           localStorage.removeItem(k);
         });
 

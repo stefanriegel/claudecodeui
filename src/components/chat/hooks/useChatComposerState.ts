@@ -20,6 +20,11 @@ import type { MarkSessionProcessing } from '../../../hooks/useSessionProtection'
 import { grantClaudeToolPermission } from '../utils/chatPermissions';
 import { safeLocalStorage } from '../utils/chatStorage';
 import {
+  deserializeStoredAttachments,
+  serializeStoredAttachments,
+  type StoredAttachment,
+} from '../utils/attachmentStorage';
+import {
   dequeuePrompt,
   enqueuePrompt,
   isQueueablePrompt,
@@ -37,6 +42,23 @@ import { escapeRegExp } from '../utils/chatFormatting';
 
 import { useFileMentions } from './useFileMentions';
 import { type SlashCommand, useSlashCommands } from './useSlashCommands';
+
+const ATTACHMENT_STORAGE_PREFIX = 'draft_images_';
+
+function fileToStoredAttachment(file: File): Promise<StoredAttachment> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () =>
+      resolve({ name: file.name, type: file.type, dataUrl: String(reader.result) });
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
+}
+
+async function storedAttachmentToFile(stored: StoredAttachment): Promise<File> {
+  const blob = await (await fetch(stored.dataUrl)).blob();
+  return new File([blob], stored.name, { type: stored.type });
+}
 
 interface UseChatComposerStateArgs {
   selectedProject: Project | null;
@@ -240,6 +262,9 @@ export function useChatComposerState({
   const queuedPromptsRef = useRef<QueuedPrompt[]>([]);
   const queuedPromptSendInFlightRef = useRef(false);
   const isLoadingRef = useRef(isLoading);
+  // Guards the attachment-persist effect against wiping storage before the
+  // attachment-restore effect for the current project has settled.
+  const attachmentsHydratedRef = useRef(false);
   const selectedProjectId = selectedProject?.projectId;
 
   useEffect(() => {
@@ -450,6 +475,30 @@ export function useChatComposerState({
         metadata: { type: 'builtin' },
       } as SlashCommand,
       '/cost',
+      { preserveInput: true },
+    );
+  }, [executeCommand]);
+
+  const currentModel =
+    provider === 'cursor'
+      ? cursorModel
+      : provider === 'codex'
+        ? codexModel
+        : provider === 'gemini'
+          ? geminiModel
+          : provider === 'opencode'
+            ? opencodeModel
+            : claudeModel;
+
+  const showModelsModal = useCallback(() => {
+    executeCommand(
+      {
+        name: '/models',
+        description: 'Select active model',
+        namespace: 'builtin',
+        metadata: { type: 'builtin' },
+      } as SlashCommand,
+      '/models',
       { preserveInput: true },
     );
   }, [executeCommand]);
@@ -954,6 +1003,38 @@ export function useChatComposerState({
   }, [selectedProjectId]);
 
   useEffect(() => {
+    // New project = not yet hydrated. Re-armed on every project switch so the
+    // persist effect below can't wipe storage before this restore settles.
+    attachmentsHydratedRef.current = false;
+    if (!selectedProjectId) {
+      return;
+    }
+    const raw = safeLocalStorage.getItem(`${ATTACHMENT_STORAGE_PREFIX}${selectedProjectId}`);
+    const stored = deserializeStoredAttachments(raw);
+    if (stored.length === 0) {
+      attachmentsHydratedRef.current = true;
+      return;
+    }
+    let cancelled = false;
+    Promise.all(stored.map(storedAttachmentToFile))
+      .then((files) => {
+        if (!cancelled) {
+          setAttachedImages(files.slice(0, 5));
+          attachmentsHydratedRef.current = true;
+        }
+      })
+      .catch((error) => {
+        console.error('Failed to restore attachments:', error);
+        if (!cancelled) {
+          attachmentsHydratedRef.current = true;
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedProjectId]);
+
+  useEffect(() => {
     if (!selectedProjectId) {
       return;
     }
@@ -963,6 +1044,40 @@ export function useChatComposerState({
       safeLocalStorage.removeItem(`draft_input_${selectedProjectId}`);
     }
   }, [input, selectedProjectId]);
+
+  useEffect(() => {
+    if (!selectedProjectId) {
+      return;
+    }
+    // Don't let the initial (pre-restore) empty attachedImages render clear
+    // storage before the restore effect above has had a chance to hydrate it.
+    if (!attachmentsHydratedRef.current) {
+      return;
+    }
+    const key = `${ATTACHMENT_STORAGE_PREFIX}${selectedProjectId}`;
+    if (attachedImages.length === 0) {
+      safeLocalStorage.removeItem(key);
+      return;
+    }
+    let cancelled = false;
+    Promise.all(attachedImages.map(fileToStoredAttachment))
+      .then((stored) => {
+        if (cancelled) {
+          return;
+        }
+        const raw = serializeStoredAttachments(stored);
+        if (raw === null) {
+          console.warn('Attachments exceed persistence quota; skipping save.');
+          safeLocalStorage.removeItem(key);
+          return;
+        }
+        safeLocalStorage.setItem(key, raw);
+      })
+      .catch((error) => console.error('Failed to persist attachments:', error));
+    return () => {
+      cancelled = true;
+    };
+  }, [attachedImages, selectedProjectId]);
 
   useEffect(() => {
     if (!textareaRef.current) {
@@ -1164,6 +1279,8 @@ export function useChatComposerState({
     selectFile,
     attachedImages,
     setAttachedImages,
+    currentModel,
+    showModelsModal,
     uploadingImages,
     imageErrors,
     getRootProps,
