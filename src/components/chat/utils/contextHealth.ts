@@ -13,8 +13,9 @@ export function computeContextHealth(
 
   const rawPercent = (used / total) * 100;
   const percent = Math.max(0, Math.min(100, Math.round(rawPercent)));
+  const clampedRaw = Math.max(0, Math.min(100, rawPercent));
   const level: ContextLevel =
-    percent < WARN_THRESHOLD ? 'ok' : percent < CRITICAL_THRESHOLD ? 'warn' : 'critical';
+    clampedRaw < WARN_THRESHOLD ? 'ok' : clampedRaw < CRITICAL_THRESHOLD ? 'warn' : 'critical';
 
   return { percent, level };
 }
