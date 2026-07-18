@@ -262,6 +262,9 @@ export function useChatComposerState({
   const queuedPromptsRef = useRef<QueuedPrompt[]>([]);
   const queuedPromptSendInFlightRef = useRef(false);
   const isLoadingRef = useRef(isLoading);
+  // Guards the attachment-persist effect against wiping storage before the
+  // attachment-restore effect for the current project has settled.
+  const attachmentsHydratedRef = useRef(false);
   const selectedProjectId = selectedProject?.projectId;
 
   useEffect(() => {
@@ -976,12 +979,16 @@ export function useChatComposerState({
   }, [selectedProjectId]);
 
   useEffect(() => {
+    // New project = not yet hydrated. Re-armed on every project switch so the
+    // persist effect below can't wipe storage before this restore settles.
+    attachmentsHydratedRef.current = false;
     if (!selectedProjectId) {
       return;
     }
     const raw = safeLocalStorage.getItem(`${ATTACHMENT_STORAGE_PREFIX}${selectedProjectId}`);
     const stored = deserializeStoredAttachments(raw);
     if (stored.length === 0) {
+      attachmentsHydratedRef.current = true;
       return;
     }
     let cancelled = false;
@@ -989,9 +996,15 @@ export function useChatComposerState({
       .then((files) => {
         if (!cancelled) {
           setAttachedImages(files.slice(0, 5));
+          attachmentsHydratedRef.current = true;
         }
       })
-      .catch((error) => console.error('Failed to restore attachments:', error));
+      .catch((error) => {
+        console.error('Failed to restore attachments:', error);
+        if (!cancelled) {
+          attachmentsHydratedRef.current = true;
+        }
+      });
     return () => {
       cancelled = true;
     };
@@ -1010,6 +1023,11 @@ export function useChatComposerState({
 
   useEffect(() => {
     if (!selectedProjectId) {
+      return;
+    }
+    // Don't let the initial (pre-restore) empty attachedImages render clear
+    // storage before the restore effect above has had a chance to hydrate it.
+    if (!attachmentsHydratedRef.current) {
       return;
     }
     const key = `${ATTACHMENT_STORAGE_PREFIX}${selectedProjectId}`;
